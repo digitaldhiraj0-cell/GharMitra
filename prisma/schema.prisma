@@ -1,0 +1,333 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  CUSTOMER
+  PROVIDER
+  ADMIN
+}
+
+enum ProviderStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  SUSPENDED
+}
+
+enum RequestStatus {
+  NEW
+  UNDER_REVIEW
+  PROVIDER_ASSIGNED
+  QUOTATION_RECEIVED
+  APPROVED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum BookingStatus {
+  PENDING
+  CONFIRMED
+  REJECTED
+  RESCHEDULED
+  COMPLETED
+  CANCELLED
+}
+
+model User {
+  id            String           @id @default(cuid())
+  name          String
+  email         String           @unique
+  phone         String?          @unique
+  passwordHash  String
+  role          Role             @default(CUSTOMER)
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+  deletedAt     DateTime?
+  customer      CustomerProfile?
+  provider      ProviderProfile?
+  requests      ServiceRequest[]
+  notifications Notification[]
+
+  @@index([role, createdAt])
+}
+
+model CustomerProfile {
+  id           String  @id @default(cuid())
+  userId       String  @unique
+  address      String?
+  district     String?
+  municipality String?
+  user         User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model ProviderProfile {
+  id                 String              @id @default(cuid())
+  userId             String              @unique
+  businessName       String
+  description        String?
+  address            String?
+  province           String?
+  district           String?
+  municipality       String?
+  ward               String?
+  experience         Int                 @default(0)
+  status             ProviderStatus      @default(PENDING)
+  registrationNumber String?
+  panVat             String?
+  logoUrl            String?
+  user               User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  services           Service[]
+  assignments        ServiceAssignment[]
+  quotations         Quotation[]
+  bookings           Booking[]
+  documents          ProviderDocument[]
+
+  @@index([status, district, municipality])
+}
+
+model ProviderDocument {
+  id         String          @id @default(cuid())
+  providerId String
+  name       String
+  url        String
+  mimeType   String
+  createdAt  DateTime        @default(now())
+  provider   ProviderProfile @relation(fields: [providerId], references: [id], onDelete: Cascade)
+}
+
+model ServiceCategory {
+  id          String    @id @default(cuid())
+  name        String    @unique
+  nameNe      String?
+  description String?
+  imageUrl    String?
+  active      Boolean   @default(true)
+  services    Service[]
+
+  @@index([active])
+}
+
+model Service {
+  id          String          @id @default(cuid())
+  providerId  String
+  categoryId  String
+  title       String
+  titleNe     String?
+  description String
+  priceFrom   Decimal?        @db.Decimal(12, 2)
+  active      Boolean         @default(true)
+  createdAt   DateTime        @default(now())
+  provider    ProviderProfile @relation(fields: [providerId], references: [id])
+  category    ServiceCategory @relation(fields: [categoryId], references: [id])
+  images      ServiceImage[]
+
+  @@index([active, categoryId])
+  @@index([title])
+}
+
+model ServiceImage {
+  id        String  @id @default(cuid())
+  serviceId String
+  url       String
+  alt       String?
+  service   Service @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+}
+
+model ServiceRequest {
+  id            String              @id @default(cuid())
+  reference     String              @unique
+  customerId    String?
+  categoryId    String?
+  title         String
+  description   String
+  phone         String
+  email         String?
+  district      String
+  municipality  String?
+  location      String
+  budget        Decimal?            @db.Decimal(12, 2)
+  preferredDate DateTime?
+  status        RequestStatus       @default(NEW)
+  createdAt     DateTime            @default(now())
+  updatedAt     DateTime            @updatedAt
+  customer      User?               @relation(fields: [customerId], references: [id])
+  assignments   ServiceAssignment[]
+  quotations    Quotation[]
+  bookings      Booking[]
+
+  @@index([status, createdAt])
+  @@index([district, categoryId])
+}
+
+model ServiceAssignment {
+  id         String          @id @default(cuid())
+  requestId  String
+  providerId String
+  assignedAt DateTime        @default(now())
+  request    ServiceRequest  @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  provider   ProviderProfile @relation(fields: [providerId], references: [id])
+
+  @@unique([requestId, providerId])
+}
+
+model Quotation {
+  id         String          @id @default(cuid())
+  number     String          @unique
+  requestId  String
+  providerId String
+  subtotal   Decimal         @db.Decimal(12, 2)
+  tax        Decimal         @default(0) @db.Decimal(12, 2)
+  total      Decimal         @db.Decimal(12, 2)
+  validUntil DateTime?
+  terms      String?
+  acceptedAt DateTime?
+  createdAt  DateTime        @default(now())
+  request    ServiceRequest  @relation(fields: [requestId], references: [id])
+  provider   ProviderProfile @relation(fields: [providerId], references: [id])
+  items      QuotationItem[]
+}
+
+model QuotationItem {
+  id          String    @id @default(cuid())
+  quotationId String
+  name        String
+  quantity    Decimal   @db.Decimal(10, 2)
+  unit        String
+  unitPrice   Decimal   @db.Decimal(12, 2)
+  amount      Decimal   @db.Decimal(12, 2)
+  quotation   Quotation @relation(fields: [quotationId], references: [id], onDelete: Cascade)
+}
+
+model Booking {
+  id          String          @id @default(cuid())
+  requestId   String
+  providerId  String
+  status      BookingStatus   @default(PENDING)
+  scheduledAt DateTime?
+  createdAt   DateTime        @default(now())
+  request     ServiceRequest  @relation(fields: [requestId], references: [id])
+  provider    ProviderProfile @relation(fields: [providerId], references: [id])
+
+  @@index([status, scheduledAt])
+}
+
+model Project {
+  id          String         @id @default(cuid())
+  title       String
+  description String?
+  location    String?
+  published   Boolean        @default(false)
+  createdAt   DateTime       @default(now())
+  images      ProjectImage[]
+}
+
+model ProjectImage {
+  id        String  @id @default(cuid())
+  projectId String
+  url       String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+}
+
+model Review {
+  id         String   @id @default(cuid())
+  providerId String
+  customerId String
+  rating     Int
+  comment    String?
+  createdAt  DateTime @default(now())
+
+  @@index([providerId, createdAt])
+}
+
+model SavedProvider {
+  id         String   @id @default(cuid())
+  customerId String
+  providerId String
+  createdAt  DateTime @default(now())
+
+  @@unique([customerId, providerId])
+}
+
+model BlogCategory {
+  id    String     @id @default(cuid())
+  name  String     @unique
+  posts BlogPost[]
+}
+
+model BlogPost {
+  id         String        @id @default(cuid())
+  categoryId String?
+  title      String
+  slug       String        @unique
+  summary    String?
+  body       String
+  published  Boolean       @default(false)
+  createdAt  DateTime      @default(now())
+  category   BlogCategory? @relation(fields: [categoryId], references: [id])
+
+  @@index([published, createdAt])
+}
+
+model ContactInquiry {
+  id        String   @id @default(cuid())
+  name      String
+  email     String?
+  phone     String?
+  subject   String
+  message   String
+  createdAt DateTime @default(now())
+}
+
+model Notification {
+  id        String    @id @default(cuid())
+  userId    String
+  title     String
+  body      String
+  readAt    DateTime?
+  createdAt DateTime  @default(now())
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, readAt])
+}
+
+model Media {
+  id        String   @id @default(cuid())
+  url       String
+  mimeType  String
+  size      Int
+  createdAt DateTime @default(now())
+}
+
+model SiteSetting {
+  key       String   @id
+  value     String
+  updatedAt DateTime @updatedAt
+}
+
+model Translation {
+  id     String @id @default(cuid())
+  key    String
+  locale String
+  value  String
+
+  @@unique([key, locale])
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  actorId   String?
+  action    String
+  entity    String
+  entityId  String?
+  metadata  Json?
+  createdAt DateTime @default(now())
+
+  @@index([entity, entityId, createdAt])
+}

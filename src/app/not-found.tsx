@@ -1,0 +1,2 @@
+import Link from "next/link";import {Header,Footer} from "@/components/Site";
+export default function NotFound(){return <><Header/><main className="section"><div className="wrap" style={{textAlign:"center"}}><span className="kicker">404</span><h1>We couldn’t find that page</h1><p>Try exploring services or return to the homepage.</p><Link className="btn btn-green" href="/">Go to homepage</Link></div></main><Footer/></>}
